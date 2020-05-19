@@ -5,6 +5,10 @@ https://github.com/fmassa/vision/blob/voc_dataset/torchvision/datasets/voc.py
 
 Updated by: Ellis Brown, Max deGroot
 """
+'''
+import sys
+sys.path.append('/home/chengk/chk-root/Read/ssd.pytorch')
+'''
 from .config import HOME
 import os.path as osp
 import sys
@@ -12,6 +16,8 @@ import torch
 import torch.utils.data as data
 import cv2
 import numpy as np
+from PIL import ImageDraw, ImageOps, Image, ImageFont
+import string
 if sys.version_info[0] == 2:
     import xml.etree.cElementTree as ET
 else:
@@ -27,6 +33,53 @@ VOC_CLASSES = (  # always index 0
 # note: if you used our download scripts, this should be right
 VOC_ROOT = osp.join(HOME, "data/VOCdevkit/")
 
+
+prints = list(string.printable)[0:84]
+def random_text(img_pil):
+    w, h = img_pil.size
+    font_size = np.random.randint(50, 300)
+    # draw watermark on img_temp
+    img_temp = Image.new('L', (350,350))
+    text_str = np.random.choice(prints, np.random.randint(low=5, high = 10))
+    text_str = "".join(text_str)
+    # use a pen to draw what we want
+    draw_temp = ImageDraw.Draw(img_temp) 
+    opac = np.random.randint(low=70, high=120)
+    #print('opac:', opac)
+    # draw the watermark on a blank
+    font_size = np.random.randint(20, 100)
+    font = ImageFont.truetype('/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc', font_size)
+    text_width, text_height = font.getsize(text_str)
+    draw_temp.text((0, 0), text_str,  font=font, fill=opac)
+    # rotate the watermark
+    rot_int = np.random.randint(low = 0, high = 20)
+    rotated_text = img_temp.rotate(rot_int,  expand=1)
+    # watermarks are drawn on the input image with white color
+    col_1 = (255,255,255)
+    col_2 = (255,255,255)
+    rand_loc = tuple(np.random.randint(low=0,high=max(min(h, w)-max(text_width, text_height), 1), size = (2,)))
+    img_pil.paste(ImageOps.colorize(rotated_text, col_1, col_2), rand_loc,  rotated_text)
+    
+    # 计算watermark在img_pil的位置
+    text_mask = np.array(rotated_text)
+    ys, xs = text_mask.nonzero()
+    x_min, x_max = xs.min(), xs.max() + 1
+    y_min, y_max = ys.min(), ys.max() + 1
+    
+    '''
+    return img_pil, (rand_loc[0]+(x_min+x_max)/2,
+                    rand_loc[1]+(y_min+y_max)/2,
+                    x_max-x_min, y_max-y_min, rot_int)
+    '''
+    return img_pil, (rand_loc[0]+x_min, rand_loc[1]+y_min, rand_loc[0]+x_max, rand_loc[1]+y_max, 1)
+
+def scale_transform(target, height, width):
+    target = list(target)
+    target[0] /= width
+    target[1] /= height
+    target[2] /= width
+    target[3] /= height
+    return [tuple(target)]
 
 class VOCAnnotationTransform(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index
@@ -96,7 +149,7 @@ class VOCDetection(data.Dataset):
 
     def __init__(self, root,
                  image_sets=[('2007', 'trainval'), ('2012', 'trainval')],
-                 transform=None, target_transform=VOCAnnotationTransform(),
+                 transform=None, target_transform=scale_transform,
                  dataset_name='VOC0712'):
         self.root = root
         self.image_set = image_sets
@@ -122,8 +175,11 @@ class VOCDetection(data.Dataset):
     def pull_item(self, index):
         img_id = self.ids[index]
 
-        target = ET.parse(self._annopath % img_id).getroot()
-        img = cv2.imread(self._imgpath % img_id)
+        #target = ET.parse(self._annopath % img_id).getroot()
+        #img = cv2.imread(self._imgpath % img_id)
+        img = Image.open(self._imgpath % img_id)
+        img, target = random_text(img)
+        img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         height, width, channels = img.shape
 
         if self.target_transform is not None:
@@ -182,3 +238,8 @@ class VOCDetection(data.Dataset):
             tensorized version of img, squeezed
         '''
         return torch.Tensor(self.pull_image(index)).unsqueeze_(0)
+
+if __name__ == '__main__':
+    dataset = VOCDetection('/home/chengk/chk/VOCdevkit', target_transform=scale_transform)
+    img_t, target, h, w = dataset.pull_item(0)
+    import pdb; pdb.set_trace()
