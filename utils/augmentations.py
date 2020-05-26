@@ -266,7 +266,7 @@ class RandomSampleCrop(object):
                 overlap = jaccard_numpy(boxes, rect)
 
                 # is min and max overlap constraint satisfied? if not try again
-                if overlap.min() < min_iou and max_iou < overlap.max():
+                if overlap.max() < min_iou or overlap.min() > max_iou:
                     continue
 
                 # cut the crop from the image
@@ -402,11 +402,11 @@ class SSDAugmentation(object):
         self.mean = mean
         self.size = size
         self.augment = Compose([
-            ConvertFromInts(),
-            ToAbsoluteCoords(),
+            ConvertFromInts(), # 图片类型转换
+            ToAbsoluteCoords(), # boxes转成坐标
             PhotometricDistort(),
-            Expand(self.mean),
-            RandomSampleCrop(),
+            #Expand(self.mean),
+            #RandomSampleCrop(),
             RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),

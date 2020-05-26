@@ -85,8 +85,7 @@ def train():
             parser.error('Must specify dataset if specifying dataset_root')
         cfg = voc
         dataset = VOCDetection(root=args.dataset_root,
-                               transform=SSDAugmentation(cfg['min_dim'],
-                                                         MEANS))
+                               transform=SSDAugmentation(cfg['min_dim'], MEANS)) 
 
     if args.visdom:
         import visdom
@@ -98,10 +97,10 @@ def train():
     if args.cuda:
         net = torch.nn.DataParallel(ssd_net)
         cudnn.benchmark = True
-    '''
     if args.resume:
         print('Resuming training, loading {}...'.format(args.resume))
         ssd_net.load_weights(args.resume)
+    '''
     else:
         vgg_weights = torch.load(args.save_folder + args.basenet)
         print('Loading base network...')
@@ -162,11 +161,16 @@ def train():
             adjust_learning_rate(optimizer, args.gamma, step_index)
 
         # load train data
-        images, targets = next(batch_iterator)
+        try:
+            images, targets = next(batch_iterator)
+        except StopIteration:
+            batch_iterator = iter(data_loader)
+            print('Start data iteration over again.')
+            images, targets = next(batch_iterator)
 
         if args.cuda:
             images = Variable(images.cuda())
-            targets = [Variable(ann.cuda(), volatile=True) for ann in targets]
+            targets = [torch.tensor(ann, requires_grad=False).cuda() for ann in targets]
         else:
             images = Variable(images)
             targets = [Variable(ann, volatile=True) for ann in targets]
@@ -191,7 +195,7 @@ def train():
             update_vis_plot(iteration, loss_l.item(), loss_c.item(),
                             iter_plot, epoch_plot, 'append')
 
-        if iteration != 0 and iteration % 5000 == 0:
+        if iteration != 0 and (iteration+1) % 5000 == 0:
             print('Saving state, iter:', iteration)
             torch.save(ssd_net.state_dict(), 'weights/ssd300_COCO_' +
                        repr(iteration) + '.pth')

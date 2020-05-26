@@ -10,6 +10,7 @@ import sys
 sys.path.append('/home/chengk/chk-root/Read/ssd.pytorch')
 '''
 from .config import HOME
+import glob
 import os.path as osp
 import sys
 import torch
@@ -37,28 +38,38 @@ VOC_ROOT = osp.join(HOME, "data/VOCdevkit/")
 prints = list(string.printable)[0:84]
 def random_text(img_pil):
     w, h = img_pil.size
-    font_size = np.random.randint(50, 300)
-    # draw watermark on img_temp
-    img_temp = Image.new('L', (350,350))
-    text_str = np.random.choice(prints, np.random.randint(low=5, high = 10))
+    text_str = np.random.choice(prints, np.random.randint(low=4, high = 8))
     text_str = "".join(text_str)
-    # use a pen to draw what we want
-    draw_temp = ImageDraw.Draw(img_temp) 
-    opac = np.random.randint(low=70, high=120)
-    #print('opac:', opac)
     # draw the watermark on a blank
-    font_size = np.random.randint(20, 100)
+    font_size = np.random.randint(12, 50)
     font = ImageFont.truetype('/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc', font_size)
     text_width, text_height = font.getsize(text_str)
+    # draw watermark on img_temp
+    img_temp = Image.new('L', (int(1.2*text_width),
+                                int(1.2*text_height)))
+    # use a pen to draw what we want
+    draw_temp = ImageDraw.Draw(img_temp) 
+    opac = np.random.randint(low=180, high=240)
     draw_temp.text((0, 0), text_str,  font=font, fill=opac)
     # rotate the watermark
-    rot_int = np.random.randint(low = 0, high = 20)
+    rot_int = np.random.randint(low = 0, high = 8)
     rotated_text = img_temp.rotate(rot_int,  expand=1)
+    '''
+    '''
+    col_1 = (100,100,100)
+    col_2 = (np.random.randint(180, 255),
+            np.random.randint(180, 255),
+            np.random.randint(180, 255))
     # watermarks are drawn on the input image with white color
+    '''
     col_1 = (255,255,255)
     col_2 = (255,255,255)
-    rand_loc = tuple(np.random.randint(low=0,high=max(min(h, w)-max(text_width, text_height), 1), size = (2,)))
+    '''
+    #rand_loc = tuple(np.random.randint(low=0,high=max(min(h, w)-max(text_width, text_height), 1), size = (2,)))
+    rand_loc = (np.random.randint(0, w-text_width),
+                np.random.randint(0, h-text_height))
     img_pil.paste(ImageOps.colorize(rotated_text, col_1, col_2), rand_loc,  rotated_text)
+    #img_pil = Image.alpha_composite(img_pil.convert('RGBA'), ImageOps.colorize(rotated_text, col_1, col_2))
     
     # 计算watermark在img_pil的位置
     text_mask = np.array(rotated_text)
@@ -79,7 +90,7 @@ def scale_transform(target, height, width):
     target[1] /= height
     target[2] /= width
     target[3] /= height
-    return [tuple(target)]
+    return np.array([tuple(target)])
 
 class VOCAnnotationTransform(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index
@@ -183,7 +194,7 @@ class VOCDetection(data.Dataset):
         height, width, channels = img.shape
 
         if self.target_transform is not None:
-            target = self.target_transform(target, width, height)
+            target = self.target_transform(target, height, width)
 
         if self.transform is not None:
             target = np.array(target)
@@ -239,7 +250,41 @@ class VOCDetection(data.Dataset):
         '''
         return torch.Tensor(self.pull_image(index)).unsqueeze_(0)
 
+class CaptchaDetection(VOCDetection):
+    def __init__(self, root, transform=None, target_transform=scale_transform):
+        self.transform = transform
+        self.target_transform = target_transform
+        self.ids = glob.glob(osp.join(root, '*'))
+
+    def parse_target(self, fn):
+        parts = fn.rsplit('.', 1)[0].split('&')
+        assert len(parts) > 4
+        target = (int(p) for p in parts[-4:])
+        return target
+
+    def pull_item(self, idx):
+        img_file = self.ids[idx]
+        target = self.parse_target(img_file)
+        img = Image.open(img_file)
+
+        img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        height, width, channels = img.shape
+
+        if self.target_transform is not None:
+            target = self.target_transform(target, height, width)
+            target = np.clip(target, 0, 1)
+
+        if self.transform is not None:
+            target = np.array(target)
+            img, boxes, labels = self.transform(img, target[:, :4], target[:, 4])
+            # to rgb
+            img = img[:, :, (2, 1, 0)]
+            # img = img.transpose(2, 0, 1)
+            target = np.clip(np.hstack((boxes, np.expand_dims(labels, axis=1))), 0, 1)
+        return torch.from_numpy(img).permute(2, 0, 1), target, height, width
+
 if __name__ == '__main__':
-    dataset = VOCDetection('/home/chengk/chk/VOCdevkit', target_transform=scale_transform)
+    # dataset = VOCDetection('/home/chengk/chk/VOCdevkit', target_transform=scale_transform)
+    dataset = CaptchaDetection('/home/chengk/chk-root/Read/ssd.pytorch/watermark_trainset')
     img_t, target, h, w = dataset.pull_item(0)
     import pdb; pdb.set_trace()

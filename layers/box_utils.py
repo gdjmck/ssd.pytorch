@@ -140,6 +140,7 @@ def encode(matched, priors, variances):
 def decode(loc, priors, variances):
     """Decode locations from predictions using priors to undo
     the encoding we did for offset regression at train time.
+    (center.x, center.y, width, height) -> (x_min, y_min, x_max, y_max)
     Args:
         loc (tensor): location predictions for loc layers,
             Shape: [num_priors,4]
