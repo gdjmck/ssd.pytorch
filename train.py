@@ -14,6 +14,10 @@ import torch.nn.init as init
 import torch.utils.data as data
 import numpy as np
 import argparse
+import data.watermark as watermark
+from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 
 def str2bool(v):
@@ -23,7 +27,7 @@ def str2bool(v):
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
-parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO'],
+parser.add_argument('--dataset', default='VOC', 
                     type=str, help='VOC or COCO')
 parser.add_argument('--dataset_root', default=VOC_ROOT,
                     help='Dataset root directory path')
@@ -66,6 +70,8 @@ else:
 
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
+    os.mkdir(os.path.join(args.save_folder, 'tb'))
+writer = SummaryWriter(os.path.join(args.save_folder, 'tb'))
 
 COCO_ROOT = ''
 def train():
@@ -86,6 +92,11 @@ def train():
         cfg = voc
         dataset = VOCDetection(root=args.dataset_root,
                                transform=SSDAugmentation(cfg['min_dim'], MEANS)) 
+
+    elif args.dataset == 'Watermark':
+        cfg = voc
+        dataset = watermark.WatermarkDetection(root=args.dataset_root, \
+                                                transform=SSDAugmentation(cfg['min_dim'], MEANS))
 
     if args.visdom:
         import visdom
@@ -190,6 +201,12 @@ def train():
         if iteration % 10 == 0:
             print('timer: %.4f sec.' % (t1 - t0))
             print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.item()), end=' ')
+
+        # plot the training image with bounding box
+        if iteration % 100 == 0:
+            img = images[0]
+            img = watermark.tv_inv_trans(img)
+            writer.add_image('ori', img, iteration)
 
         if args.visdom:
             update_vis_plot(iteration, loss_l.item(), loss_c.item(),

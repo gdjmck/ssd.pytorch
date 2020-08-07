@@ -49,7 +49,7 @@ def random_text(img_pil):
                                 int(1.2*text_height)))
     # use a pen to draw what we want
     draw_temp = ImageDraw.Draw(img_temp) 
-    opac = np.random.randint(low=180, high=240)
+    opac = np.random.randint(low=255, high=256)
     draw_temp.text((0, 0), text_str,  font=font, fill=opac)
     # rotate the watermark
     rot_int = np.random.randint(low = 0, high = 8)
@@ -66,8 +66,9 @@ def random_text(img_pil):
     col_2 = (255,255,255)
     '''
     #rand_loc = tuple(np.random.randint(low=0,high=max(min(h, w)-max(text_width, text_height), 1), size = (2,)))
-    rand_loc = (np.random.randint(0, w-text_width),
-                np.random.randint(0, h-text_height))
+    #print(w, text_height, h, text_height)
+    rand_loc = (np.random.randint(0, max(1, w-text_width)),
+                np.random.randint(0, max(1, h-text_height)))
     img_pil.paste(ImageOps.colorize(rotated_text, col_1, col_2), rand_loc,  rotated_text)
     #img_pil = Image.alpha_composite(img_pil.convert('RGBA'), ImageOps.colorize(rotated_text, col_1, col_2))
     

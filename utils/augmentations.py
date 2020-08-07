@@ -66,7 +66,8 @@ class Lambda(object):
 
 class ConvertFromInts(object):
     def __call__(self, image, boxes=None, labels=None):
-        return image.astype(np.float32), boxes, labels
+        image = image.astype(np.float32)
+        return image, boxes, labels
 
 
 class SubtractMeans(object):
@@ -394,6 +395,7 @@ class PhotometricDistort(object):
         else:
             distort = Compose(self.pd[1:])
         im, boxes, labels = distort(im, boxes, labels)
+        print('photo distort:', im.max())
         return self.rand_light_noise(im, boxes, labels)
 
 
@@ -404,14 +406,14 @@ class SSDAugmentation(object):
         self.augment = Compose([
             ConvertFromInts(), # 图片类型转换
             ToAbsoluteCoords(), # boxes转成坐标
-            PhotometricDistort(),
+            #PhotometricDistort(),
             #Expand(self.mean),
             #RandomSampleCrop(),
             RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
-            SubtractMeans(self.mean)
+            #SubtractMeans(self.mean)
         ])
 
-    def __call__(self, img, boxes, labels):
+    def __call__(self, img, boxes, labels=None):
         return self.augment(img, boxes, labels)
